@@ -18,14 +18,14 @@ def make_sheet(sheet_name) -> gspread.Worksheet:
     return worksheet
 
 
-def export_to_sheet(txns, sheet) -> None:
+def export_to_sheet(txns: list, sheet: gspread.Worksheet) -> None:
     """Takes txns list and exports to google sheets
     
     :param txns list: list of transactions from csv files
     :param sheet gspread.Worksheet: gspread Worksheet object to export to
     """
-    worksheet.update(f'A2:E{len(txns) + 1}', txns)
-    worksheet.sort((1, 'asc'), range=f'A2:E{len(txns) + 1}')
+    sheet.update(f'A2:E{len(txns) + 1}', txns)
+    sheet.sort((1, 'asc'), range=f'A2:E{len(txns) + 1}')
 
 
 if __name__ == "__main__":
@@ -40,8 +40,8 @@ if __name__ == "__main__":
                 txn_files.append(Santander(filename))
     txns = []
     for file in txn_files:
-        txns.extend(file.extract_txns())
+        file.extract_txns()
+        txns.extend(file.txns)
     if txns:
         worksheet = make_sheet(f'{month.upper()}_22')
-
-
+        export_to_sheet(txns, worksheet)
