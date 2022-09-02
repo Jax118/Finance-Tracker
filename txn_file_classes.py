@@ -1,21 +1,29 @@
 import re
 import csv
 import datetime
+from abc import ABC, abstractmethod
 
 from catagories import catagorise
+from txn_data_type import TxnData
 
 
-class TxnFile:
+class TxnFile(ABC):
     """Base transaction file class, holds transaction data exported from bank or credit card.
     """
+
     def __init__(self, filename: str):
         """
         :param filename str: csv filename found in /csv/<month>
+
+        Attributes:
+            filename: The files's name
+            txns: A dict with keys of month integer, and values of lists of TxnData
         """
+
         self.filename: str = filename
-        self.txns: dict = {}
+        self.txns: dict[int, list[TxnData]] = {}
 
-
+    @abstractmethod
     def extract_txns(self) -> None:
         pass
 
@@ -27,26 +35,27 @@ class Amex(TxnFile):
     def extract_txns(self) -> None:
         """Takes a given amex csv filename and updates self.txns
         """
-        temp_row = {}
+
         with open(f'csv/{self.filename}', 'r') as csv_file:
             csv_reader = csv.reader(csv_file)
             for count, row in enumerate(csv_reader):
-                if count > 0: # Don't use header row
-                    month = datetime.datetime.strptime(row[0], "%d/%m/%Y")
-                    temp_row['Date'] = row[0]
-                    temp_row['Description'] = row[1]
-                    temp_row['Spender'] = 'Jake'
-                    temp_row['Catagory'] = catagorise(temp_row['Description'])
+                txn_data: TxnData = {}
+                if count > 0:  # Don't use header row
+                    txn_data['date'] = row[0]
+                    txn_data['catagory'] = catagorise(row[1])
+                    txn_data['description'] = row[1]
                     if 'jess' in self.filename:
-                        temp_row['Price'] = float(row[4])
-                        if 'MISS' in row[2]:
-                            temp_row['Spender'] = 'Jess'
+                        txn_data['price'] = float(row[4])
+                        if 'MISS' in row[2]: txn_data['spender'] = 'Jess'
                     else:
-                        temp_row['Price'] = float(row[2])
+                        txn_data['price'] = float(row[2])
+                    txn_data['spender'] = 'Jake'
+                    month = datetime.datetime.strptime(
+                        txn_data['date'], "%d/%m/%Y").month
                     if month in self.txns:
-                        self.txns[month].append(temp_row)
+                        self.txns[month].append(txn_data)
                     else:
-                        self.txns[month] = [temp_row]
+                        self.txns[month] = [txn_data]
 
 
 class Santander(TxnFile):
@@ -56,24 +65,24 @@ class Santander(TxnFile):
     def extract_txns(self) -> None:
         """Takes a given Santander csv filename and updates self.txns
         """
+
         with open(f'csv/{self.filename}', 'r', encoding='utf-8-sig') as csv_file:
             csv_reader = csv.reader(csv_file)
             for count, row in enumerate(csv_reader):
-                temp_row = {}
-                if count > 4: # Don't use header rows
-                    month = datetime.datetime.strptime(row[1], "%d/%m/%Y").month
-                    temp_row['Date'] = row[1]
-                    temp_row['Catagory'] =  catagorise(row[3])
-                    temp_row['Description'] = re.sub(r'\sON\s(\d{2}-){2}\d{4}', '', row[3]).replace('CARD PAYMENT TO ', '').replace('FASTER PAYMENTS RECEIPT ', '')
-                    temp_row['Price'] = row[5] if row[5] else row[6]
-                    chars = ['£', ',', '\'']
-                    for c in chars:
-                        temp_row['Price'] = temp_row['Price'].replace(c, '')
-                    temp_row['Price'] = float(temp_row['Price']) * - 1 if row[5] else float(temp_row['Price'])
-                    temp_row['Spender'] = 'Jake'
+                if count > 4:  # Don't use header rows
+                    txn_data: TxnData = {}
+                    txn_data['date'] = row[1]
+                    txn_data['catagory'] = catagorise(row[3])
+                    txn_data['description'] = re.sub(r'\sON\s(\d{2}-){2}\d{4}', '', row[3]).replace('CARD PAYMENT TO ', '').replace('FASTER PAYMENTS RECEIPT ', '')
+                    # Invert 'Money in' to be negative to deduct from total spending
+                    txn_data['price'] = float(row[5].strip(
+                        "£,'") * -1) if row[5] else float(row[6].strip("£,'"))
+                    txn_data['spender'] = 'Jake'
                     if 'jess' in self.filename:
-                        temp_row['Spender'] = 'Jess'
+                        txn_data['spender'] = 'Jess'
+                    month = datetime.datetime.strptime(
+                        txn_data['date'], "%d/%m/%Y").month
                     if month in self.txns:
-                        self.txns[month].append(temp_row)
+                        self.txns[month].append(txn_data)
                     else:
-                        self.txns[month] = [temp_row]
+                        self.txns[month] = [txn_data]
