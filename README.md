@@ -18,3 +18,4 @@ Finance tracker is a python script, who's goal is to automate the amalgamation o
 * When a new sheet is added for a month, update the **Overview** page to reflect the addition.
 * Create and update a [Sankey chart](https://developers.google.com/chart/interactive/docs/gallery/sankey) on the **Overview** page.
 * Make the year in sheet titles dynamic from transaction data.
+* Expand README
