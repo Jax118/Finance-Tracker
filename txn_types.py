@@ -1,27 +1,41 @@
 import re
 import csv
-import datetime
+from datetime import datetime
 from abc import ABC, abstractmethod
 
 from catagories import catagorise
-from txn_data_type import TxnData
+
+from typing import TypedDict
+
+
+class TxnData(TypedDict):
+    date: str
+    catagory: str
+    description: str
+    price: float
+    spender: str
 
 
 class TxnFile(ABC):
     """Base transaction file class, holds transaction data exported from bank or credit card.
+    
+    Attributes:
+    filename: The files's name
+    txns: A dict with keys of month integer, and values of lists of TxnData
     """
 
     def __init__(self, filename: str):
-        """
-        :param filename str: csv filename found in /csv/<month>
-
-        Attributes:
-            filename: The files's name
-            txns: A dict with keys of month integer, and values of lists of TxnData
-        """
-
         self.filename: str = filename
         self.txns: dict[int, list[TxnData]] = {}
+
+
+    @classmethod
+    def from_name(cls, filename: str):
+        if '.csv' in filename:
+            if 'amex' in filename:
+                return Amex(filename)
+            if 'santander' in filename:
+                return Santander(filename)
 
     @abstractmethod
     def extract_txns(self) -> None:
@@ -50,7 +64,7 @@ class Amex(TxnFile):
                     else:
                         txn_data['price'] = float(row[2])
                     txn_data['spender'] = 'Jake'
-                    month = datetime.datetime.strptime(
+                    month = datetime.strptime(
                         txn_data['date'], "%d/%m/%Y").month
                     if month in self.txns:
                         self.txns[month].append(txn_data)
@@ -74,13 +88,13 @@ class Santander(TxnFile):
                     txn_data['date'] = row[1]
                     txn_data['catagory'] = catagorise(row[3])
                     txn_data['description'] = re.sub(r'\sON\s(\d{2}-){2}\d{4}', '', row[3]).replace('CARD PAYMENT TO ', '').replace('FASTER PAYMENTS RECEIPT ', '')
-                    # Invert 'Money in' to be negative to deduct from total spending
+                    # Invert 'Money in' to be negative, to deduct from total spending
                     txn_data['price'] = float(row[5].strip(
                         "£,'") * -1) if row[5] else float(row[6].strip("£,'"))
                     txn_data['spender'] = 'Jake'
                     if 'jess' in self.filename:
                         txn_data['spender'] = 'Jess'
-                    month = datetime.datetime.strptime(
+                    month = datetime.strptime(
                         txn_data['date'], "%d/%m/%Y").month
                     if month in self.txns:
                         self.txns[month].append(txn_data)
