@@ -2,12 +2,11 @@ import os
 import gspread
 import calendar
 
-from datetime import datetime
-
 from txn_types import TxnData, TxnFile
 
 
 _SPREADSHEET_NAME = 'Spend Tracker v2'
+_RANGE = 'A2:E'
 
 
 def make_sheet(sheet_name) -> gspread.Worksheet:
@@ -30,12 +29,12 @@ def read_sheet(worksheet: gspread.Worksheet) -> list[TxnData]:
 
     :param worksheet Worksheet: Worksheet object to read from 
     """
-    from_sheet = [{"date": datetime.strptime(txns[0], "%d/%m/%Y"),
-                   "catagory": txns[1],
-                   "description": txns[2],
-                   "price": txns[3].replace('£', '').strip(),
-                   "spender": txns[4]} for txns in worksheet.get("A2:E")]
-    return from_sheet
+    txns = [{"date": txns[0],
+             "catagory": txns[1],
+             "description": txns[2],
+             "price": float(txns[3].replace('£', '').strip()),
+             "spender": txns[4]} for txns in worksheet.get(f'{_RANGE}')]
+    return txns
 
 
 def export_to_sheet(txns: list[TxnData], worksheet: gspread.Worksheet) -> None:
@@ -47,8 +46,26 @@ def export_to_sheet(txns: list[TxnData], worksheet: gspread.Worksheet) -> None:
 
     lst_of_txns = []
     [lst_of_txns.append([value for value in txn.values()]) for txn in txns]
-    worksheet.update(f'A2:E{len(lst_of_txns) + 1}', lst_of_txns)
-    worksheet.sort((1, 'asc'), range=f'A2:E{len(lst_of_txns) + 1}')
+    worksheet.update(f'{_RANGE}{len(lst_of_txns) + 1}', lst_of_txns)
+    worksheet.sort((1, 'asc'), range=f'{_RANGE}{len(lst_of_txns) + 1}')
+
+
+def combine_txns(txns: list[TxnData], txns_from_sheet: list[TxnData]) -> list[TxnData]:
+    """Combines txns read from a csv with txns from a worksheet
+    
+    :param txns list: list of TxnData from csv
+    :param txns_from_sheet list: list of TxnData from worksheet
+    """
+    
+    deduped = []
+    dupe = set()
+    combined = txns + txns_from_sheet
+    for txn in combined:
+        tupled = tuple(txn.items())
+        if tupled not in dupe:
+            dupe.add(tupled)
+            deduped.append(txn)
+    return deduped
 
 
 if __name__ == "__main__":
@@ -58,15 +75,18 @@ if __name__ == "__main__":
     #
     #   When a new sheet is added, update the Overview page to include it
     #
+    #   Once a csv had been read, don't read it again
+    #
     #   Create a Sankey chart from all transactions
     #
     #   Make the year in the sheet title dynamic
     #
     #   Use defaultDicts
-
+    #
+    #   Don't dupe uncatagorised txns that have been edited with a catagory
 
     txns_to_export = {}
-    txn_files = [TxnFile.from_filename(filename)
+    txn_files = [TxnFile.from_name(filename)
                  for filename in os.listdir(f'csv/')]
     for file in txn_files:
         file.extract_txns()
@@ -80,6 +100,11 @@ if __name__ == "__main__":
     sheet = gc.open(_SPREADSHEET_NAME)
     for month, txns in txns_to_export.items():
         title = f'{calendar.month_name[month]}_22'
-        worksheet = make_sheet(title) if title not in [
-            sheet.title for sheet in sheet.worksheets()] else sheet.worksheet(title)
-        export_to_sheet(txns, worksheet)
+        if title not in [sheet.title for sheet in sheet.worksheets()]:
+            worksheet = make_sheet(title)
+            export_to_sheet(txns, worksheet)
+        else:
+            worksheet = sheet.worksheet(title)
+            txns_from_sheet = read_sheet(worksheet)
+            combined = combine_txns(txns, txns_from_sheet)
+            export_to_sheet(combined, worksheet)

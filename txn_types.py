@@ -89,8 +89,11 @@ class Santander(TxnFile):
                     txn_data['catagory'] = catagorise(row[3])
                     txn_data['description'] = re.sub(r'\sON\s(\d{2}-){2}\d{4}', '', row[3]).replace('CARD PAYMENT TO ', '').replace('FASTER PAYMENTS RECEIPT ', '')
                     # Invert 'Money in' to be negative, to deduct from total spending
-                    txn_data['price'] = float(row[5].strip(
-                        "£,'") * -1) if row[5] else float(row[6].strip("£,'"))
+                    # txn_data['price'] = float(row[5].replace("£,'", "") * -1) if row[5] else float(row[6].replace("£,'", ""))
+                    if row[5]:
+                        txn_data['price'] = float(re.sub("[£,]", "", row[5])) * -1
+                    else:
+                        txn_data['price'] = float(re.sub("[£,]", "", row[6]))
                     txn_data['spender'] = 'Jake'
                     if 'jess' in self.filename:
                         txn_data['spender'] = 'Jess'
